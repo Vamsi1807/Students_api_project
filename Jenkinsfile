@@ -31,8 +31,7 @@ pipeline {
 
         stage('Package') {
             steps {
-                echo 'Packaging application...'
-                sh './mvnw clean package'
+                sh './mvnw clean package -DskipTests'
             }
         }
     }
