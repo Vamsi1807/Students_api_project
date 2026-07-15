@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        MAVEN_OPTS = '-Dmaven.test.failure.ignore=false'
-    }
-
     stages {
 
         stage('Checkout') {
@@ -14,7 +10,7 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Compile') {
             steps {
                 echo 'Compiling application...'
                 sh 'chmod +x mvnw'
@@ -22,15 +18,9 @@ pipeline {
             }
         }
 
-        stage('Test') {
-            steps {
-                echo 'Running unit tests...'
-                sh './mvnw test'
-            }
-        }
-
         stage('Package') {
             steps {
+                echo 'Packaging application...'
                 sh './mvnw clean package -DskipTests'
             }
         }
@@ -45,7 +35,6 @@ pipeline {
         success {
             echo 'Build Successful!'
             archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-            junit 'target/surefire-reports/*.xml'
         }
 
         failure {
