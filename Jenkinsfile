@@ -22,6 +22,18 @@ pipeline {
                 sh './mvnw clean package -DskipTests'
             }
         }
+
+        stage('Debug Jenkins Variables') {
+            steps {
+                script {
+                    echo "JOB_NAME     = ${env.JOB_NAME}"
+                    echo "BUILD_NUMBER = ${env.BUILD_NUMBER}"
+                    echo "BUILD_URL    = ${env.BUILD_URL}"
+                    echo "GIT_BRANCH   = ${env.GIT_BRANCH}"
+                    echo "GIT_COMMIT   = ${env.GIT_COMMIT}"
+                }
+            }
+        }
     }
 
     post {
@@ -29,7 +41,9 @@ pipeline {
         success {
             script {
 
-                def duration = currentBuild.durationString.replace(' and counting', '')
+                def branch = (env.GIT_BRANCH ?: "main").replace("origin/", "")
+                def buildUrl = "http://host.docker.internal:8086/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/"
+                def consoleUrl = "${buildUrl}console"
 
                 sh """
                 curl -X POST http://host.docker.internal:8080/api/builds \
@@ -39,41 +53,47 @@ pipeline {
                     "buildNumber":${env.BUILD_NUMBER},
                     "status":"SUCCESS",
                     "duration":0,
-                    "branch":"${env.GIT_BRANCH ?: "main"}",
+                    "branch":"${branch}",
                     "commitId":"${env.GIT_COMMIT ?: ""}",
-                    "buildUrl":"${env.BUILD_URL}",
-                    "consoleUrl":"${env.BUILD_URL}console"
+                    "buildUrl":"${buildUrl}",
+                    "consoleUrl":"${consoleUrl}"
                 }'
                 """
             }
 
             archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
 
-            echo 'Build Successful!'
+            echo "Build Successful!"
         }
 
         failure {
+            script {
 
-            sh """
-            curl -X POST http://host.docker.internal:8080/api/builds \
-            -H "Content-Type: application/json" \
-            -d '{
-                "jobName":"${env.JOB_NAME}",
-                "buildNumber":${env.BUILD_NUMBER},
-                "status":"FAILURE",
-                "duration":0,
-                "branch":"${env.GIT_BRANCH ?: "main"}",
-                "commitId":"${env.GIT_COMMIT ?: ""}",
-                "buildUrl":"${env.BUILD_URL}",
-                "consoleUrl":"${env.BUILD_URL}console"
-            }'
-            """
+                def branch = (env.GIT_BRANCH ?: "main").replace("origin/", "")
+                def buildUrl = "http://host.docker.internal:8086/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/"
+                def consoleUrl = "${buildUrl}console"
 
-            echo 'Build Failed!'
+                sh """
+                curl -X POST http://host.docker.internal:8080/api/builds \
+                -H "Content-Type: application/json" \
+                -d '{
+                    "jobName":"${env.JOB_NAME}",
+                    "buildNumber":${env.BUILD_NUMBER},
+                    "status":"FAILURE",
+                    "duration":0,
+                    "branch":"${branch}",
+                    "commitId":"${env.GIT_COMMIT ?: ""}",
+                    "buildUrl":"${buildUrl}",
+                    "consoleUrl":"${consoleUrl}"
+                }'
+                """
+            }
+
+            echo "Build Failed!"
         }
 
         always {
-            echo 'Pipeline Finished.'
+            echo "Pipeline Finished."
         }
     }
 }
