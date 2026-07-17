@@ -5,14 +5,13 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                echo 'Cloning source code...'
+                echo 'Checking out source code...'
                 checkout scm
             }
         }
 
         stage('Compile') {
             steps {
-                echo 'Compiling application...'
                 sh 'chmod +x mvnw'
                 sh './mvnw clean compile'
             }
@@ -20,7 +19,6 @@ pipeline {
 
         stage('Package') {
             steps {
-                echo 'Packaging application...'
                 sh './mvnw clean package -DskipTests'
             }
         }
@@ -28,17 +26,54 @@ pipeline {
 
     post {
 
-        always {
-            echo 'Pipeline execution completed.'
-        }
-
         success {
-            echo 'Build Successful!'
+            script {
+
+                def duration = currentBuild.durationString.replace(' and counting', '')
+
+                sh """
+                curl -X POST http://host.docker.internal:8080/api/builds \
+                -H "Content-Type: application/json" \
+                -d '{
+                    "jobName":"${env.JOB_NAME}",
+                    "buildNumber":${env.BUILD_NUMBER},
+                    "status":"SUCCESS",
+                    "duration":0,
+                    "branch":"${env.GIT_BRANCH ?: "main"}",
+                    "commitId":"${env.GIT_COMMIT ?: ""}",
+                    "buildUrl":"${env.BUILD_URL}",
+                    "consoleUrl":"${env.BUILD_URL}console"
+                }'
+                """
+            }
+
             archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+
+            echo 'Build Successful!'
         }
 
         failure {
+
+            sh """
+            curl -X POST http://host.docker.internal:8080/api/builds \
+            -H "Content-Type: application/json" \
+            -d '{
+                "jobName":"${env.JOB_NAME}",
+                "buildNumber":${env.BUILD_NUMBER},
+                "status":"FAILURE",
+                "duration":0,
+                "branch":"${env.GIT_BRANCH ?: "main"}",
+                "commitId":"${env.GIT_COMMIT ?: ""}",
+                "buildUrl":"${env.BUILD_URL}",
+                "consoleUrl":"${env.BUILD_URL}console"
+            }'
+            """
+
             echo 'Build Failed!'
+        }
+
+        always {
+            echo 'Pipeline Finished.'
         }
     }
 }
